@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import type { Project } from "@/types"
-import { supabase, hasSupabaseConfig, safeSupabaseOperation } from "@/lib/supabase"
+import { hasSupabaseConfig, safeSupabaseOperation, safeAuth } from "@/lib/supabase" // Added safeAuth
 import AdminLayout from "../admin-layout"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -37,30 +38,16 @@ export default function ProjectsPage() {
     }
 
     const result = await safeSupabaseOperation(
-      async () => {
-        const { getSupabaseClient } = await import("@/lib/supabase")
-        const client = await getSupabaseClient()
-
-        if (!client) {
-          throw new Error("Supabase client not available")
-        }
-
-        // Check authentication first
+      async (client: SupabaseClient) => {
         const {
           data: { user },
           error: authError,
-        } = await supabase.auth.getUser()
-
+        } = await safeAuth.getUser() // Use safeAuth
         if (authError || !user) {
-          throw new Error("Authentication required")
+          throw new Error(authError?.message || "Authentication required")
         }
-
         const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
-
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-
+        if (error) throw new Error(`Database error: ${error.message}`)
         return data || []
       },
       [],
@@ -70,21 +57,13 @@ export default function ProjectsPage() {
     if (result.error) {
       toast.error(`Failed to load projects: ${result.error}`)
     }
-
     setProjects(result.data)
     setLoading(false)
   }
 
   async function deleteProject(id: string) {
     const result = await safeSupabaseOperation(
-      async () => {
-        const { getSupabaseClient } = await import("@/lib/supabase")
-        const client = await getSupabaseClient()
-
-        if (!client) {
-          throw new Error("Supabase client not available")
-        }
-
+      async (client: SupabaseClient) => {
         const { error } = await client.from("projects").delete().eq("id", id)
         if (error) throw error
         return true
@@ -141,7 +120,6 @@ export default function ProjectsPage() {
                           <Button variant="outline" size="sm" asChild className="border-gray-700 hover:bg-gray-800">
                             <Link href={`/admin/projects/${project.id}`}>Edit</Link>
                           </Button>
-
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="destructive" size="sm">

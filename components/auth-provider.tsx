@@ -1,10 +1,9 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { safeAuth, hasSupabaseConfig } from "@/lib/supabase"
+import { safeAuth, hasSupabaseConfig, getSupabaseClient } from "@/lib/supabase" // Added getSupabaseClient
 import type { User } from "@/types"
 
 interface AuthContextType {
@@ -29,89 +28,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true
-    let authSubscription: any = null
+    let authSubUnsubscribe: (() => void) | null = null
 
-    const getUser = async () => {
-      // If Supabase is not configured, skip auth
+    const initializeAuth = async () => {
       if (!hasSupabaseConfig) {
-        console.log("Supabase not configured, skipping authentication")
-        if (mounted) {
-          setLoading(false)
-        }
+        console.log("AuthProvider: Supabase not configured, skipping auth.")
+        if (mounted) setLoading(false)
         return
       }
 
+      // Ensure client is attempted to be initialized
+      await getSupabaseClient()
+
+      // Get initial session
       try {
         const { data, error } = await safeAuth.getSession()
-
         if (!mounted) return
 
-        if (error) {
-          console.warn("Auth session error:", error)
-          setLoading(false)
-          return
-        }
+        if (error) console.warn("AuthProvider: Auth session error:", error)
 
         if (data?.session?.user) {
-          setUser({
-            id: data.session.user.id,
-            email: data.session.user.email || "",
-          })
+          setUser({ id: data.session.user.id, email: data.session.user.email || "" })
         } else if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
           router.push("/admin/login")
         }
-      } catch (error) {
-        console.warn("Failed to get auth session:", error)
+      } catch (e) {
+        console.warn("AuthProvider: Failed to get initial session:", e)
       } finally {
-        if (mounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    const setupAuthListener = async () => {
-      if (!hasSupabaseConfig) {
-        return
+        if (mounted) setLoading(false)
       }
 
+      // Set up auth state listener
       try {
-        const authListener = safeAuth.onAuthStateChange((event: string, session: any) => {
+        const {
+          data: { subscription },
+        } = safeAuth.onAuthStateChange((event: string, session: any) => {
           if (!mounted) return
-
           if (session?.user) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || "",
-            })
+            setUser({ id: session.user.id, email: session.user.email || "" })
           } else {
             setUser(null)
             if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
               router.push("/admin/login")
             }
           }
-          setLoading(false)
+          setLoading(false) // Ensure loading is set to false after state change
         })
-
-        authSubscription = authListener.data?.subscription
-      } catch (error) {
-        console.warn("Failed to set up auth listener:", error)
-        if (mounted) {
-          setLoading(false)
-        }
+        authSubUnsubscribe = subscription?.unsubscribe
+      } catch (e) {
+        console.warn("AuthProvider: Failed to set up auth listener:", e)
+        if (mounted) setLoading(false)
       }
     }
 
-    // Initialize auth
-    getUser()
-    setupAuthListener()
+    initializeAuth()
 
     return () => {
       mounted = false
-      if (authSubscription?.unsubscribe) {
+      if (authSubUnsubscribe) {
         try {
-          authSubscription.unsubscribe()
+          authSubUnsubscribe()
         } catch (error) {
-          console.warn("Error unsubscribing from auth:", error)
+          console.warn("AuthProvider: Error unsubscribing from auth:", error)
         }
       }
     }
@@ -119,16 +97,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     if (!hasSupabaseConfig) {
-      console.warn("Cannot sign out: Supabase not configured")
+      console.warn("AuthProvider: Cannot sign out, Supabase not configured.")
       return
     }
-
     try {
       await safeAuth.signOut()
       setUser(null)
       router.push("/admin/login")
     } catch (error) {
-      console.warn("Sign out error:", error)
+      console.warn("AuthProvider: Sign out error:", error)
     }
   }
 

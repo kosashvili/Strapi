@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SimpleStatus } from "@/components/simple-status"
-import { safeSupabaseOperation, supabase } from "@/lib/supabase"
+import { safeSupabaseOperation } from "@/lib/supabase"
 import AdminLayout from "./admin-layout"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function AdminDashboard() {
   const [projectCount, setProjectCount] = useState<number | null>(null)
@@ -13,19 +14,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function fetchStats() {
       const result = await safeSupabaseOperation(
-        async () => {
-          if (!supabase) {
-            throw new Error("Supabase not available")
-          }
-          const { count, error } = await supabase.from("projects").select("*", { count: "exact", head: true })
+        async (client: SupabaseClient) => {
+          const { count, error } = await client.from("projects").select("*", { count: "exact", head: true })
           if (error) throw error
           return count
         },
-        null,
+        null, // Fallback value for count
         "Fetch project count",
       )
 
       setProjectCount(result.data)
+      if (result.error) console.warn("AdminDashboard fetchStats error:", result.error)
       setLoading(false)
     }
 
@@ -44,7 +43,7 @@ export default function AdminDashboard() {
               <CardTitle className="text-sm text-gray-400">Total Projects</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{loading ? "..." : (projectCount ?? "Demo")}</p>
+              <p className="text-3xl font-bold">{loading ? "..." : (projectCount ?? "N/A")}</p>
             </CardContent>
           </Card>
         </div>

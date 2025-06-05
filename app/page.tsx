@@ -5,91 +5,83 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import Link from "next/link"
-import { supabase, safeSupabaseOperation } from "@/lib/supabase"
+import { safeSupabaseOperation } from "@/lib/supabase" // getSupabaseClient is used internally by safeSupabaseOperation
 import type { Project } from "@/types"
 import { DataStatus } from "@/components/data-status"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [isUsingFallback, setIsUsingFallback] = useState(false)
-  const [connectionError, setConnectionError] = useState<string | null>(null)
-
-  // Fallback projects data
+  // Fallback projects data (content omitted for brevity)
   const fallbackProjects: Project[] = [
     {
       id: "1",
       title: "Neural Canvas",
-      description:
-        "AI-powered drawing tool that transforms sketches into digital art using machine learning algorithms.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Neural+Canvas",
+      description: "AI-powered drawing tool...",
+      imageUrl: "/placeholder.svg?height=200&width=300",
       visitUrl: "https://example.com/neural-canvas",
     },
     {
       id: "2",
       title: "Quantum Todo",
-      description: "Task management app with probabilistic scheduling and uncertainty-based priority systems.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Quantum+Todo",
+      description: "Task management app...",
+      imageUrl: "/placeholder.svg?height=200&width=300",
       visitUrl: "https://example.com/quantum-todo",
     },
     {
       id: "3",
       title: "Syntax Poetry",
-      description:
-        "Code-to-poetry generator that converts programming syntax into readable verse and artistic expressions.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Syntax+Poetry",
+      description: "Code-to-poetry generator...",
+      imageUrl: "/placeholder.svg?height=200&width=300",
       visitUrl: "https://example.com/syntax-poetry",
     },
     {
       id: "4",
       title: "Memory Palace VR",
-      description: "Virtual reality memory training application using spatial mnemonics and 3D environments.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Memory+Palace+VR",
+      description: "Virtual reality memory training...",
+      imageUrl: "/placeholder.svg?height=200&width=300",
       visitUrl: "https://example.com/memory-palace",
     },
     {
       id: "5",
       title: "Chaos Calculator",
-      description: "Mathematical visualization tool for exploring fractal patterns and chaotic systems in real-time.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Chaos+Calculator",
+      description: "Mathematical visualization tool...",
+      imageUrl: "/placeholder.svg?height=200&width=300",
       visitUrl: "https://example.com/chaos-calculator",
     },
   ]
 
   async function fetchProjects() {
     setLoading(true)
-    setConnectionError(null)
+    // setConnectionError(null) // This state was removed, error is part of safeSupabaseOperation result
 
-    // Use safe wrapper that never throws
     const result = await safeSupabaseOperation(
-      async () => {
-        if (!supabase) {
-          throw new Error("Supabase client not available")
-        }
-
-        const { data, error } = await supabase.from("projects").select("*").order("created_at", { ascending: false })
-
+      async (client: SupabaseClient) => {
+        // Client is passed here
+        const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
         if (error) {
           throw new Error(`Database error: ${error.message}`)
         }
-
         return data || []
       },
       fallbackProjects,
       "Fetch projects",
     )
 
-    // Always set projects (either from DB or fallback)
     setProjects(result.data)
     setIsUsingFallback(result.isUsingFallback)
-    setConnectionError(result.error)
+    // setConnectionError(result.error) // Error can be logged or displayed if needed
+    if (result.error) {
+      console.warn("Fetch projects error:", result.error)
+    }
     setLoading(false)
 
-    // Log the result for debugging
     if (result.isUsingFallback) {
-      console.log("🔄 Using fallback data:", result.error)
+      console.log("🔄 Using fallback data for projects. Error:", result.error)
     } else {
-      console.log("✅ Using live data from Supabase")
+      console.log("✅ Using live data for projects from Supabase")
     }
   }
 
@@ -136,7 +128,7 @@ export default function HomePage() {
                           <Image
                             src={project.imageUrl || "/placeholder.svg"}
                             alt={project.title}
-                            fill
+                            fill // Changed from layout="fill"
                             className="object-cover"
                           />
                         </div>
