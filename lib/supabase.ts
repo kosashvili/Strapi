@@ -6,6 +6,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 
 // Validate URL format
 function isValidUrl(string: string) {
+  if (!string) return false
   try {
     const url = new URL(string)
     return url.protocol === "https:" && url.hostname.includes("supabase")
