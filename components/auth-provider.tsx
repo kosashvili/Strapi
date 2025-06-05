@@ -29,6 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getUser = async () => {
+      if (!supabase) {
+        setLoading(false)
+        return
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -46,6 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     getUser()
+
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
 
     const {
       data: { subscription },
@@ -65,11 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => {
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
     }
   }, [pathname, router])
 
   const signOut = async () => {
+    if (!supabase) return
     await supabase.auth.signOut()
     router.push("/admin/login")
   }
