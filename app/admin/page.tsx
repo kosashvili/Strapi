@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SimpleStatus } from "@/components/simple-status"
-import { safeSupabaseOperation } from "@/lib/supabase"
+import { adminDb, hasSupabaseConfig } from "@/lib/admin-auth"
 import AdminLayout from "./admin-layout"
-import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function AdminDashboard() {
   const [projectCount, setProjectCount] = useState<number | null>(null)
@@ -13,18 +12,19 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function fetchStats() {
-      const result = await safeSupabaseOperation(
-        async (client: SupabaseClient) => {
-          const { count, error } = await client.from("projects").select("*", { count: "exact", head: true })
-          if (error) throw error
-          return count
-        },
-        null, // Fallback value for count
-        "Fetch project count",
-      )
+      if (!hasSupabaseConfig) {
+        setLoading(false)
+        return
+      }
 
-      setProjectCount(result.data)
-      if (result.error) console.warn("AdminDashboard fetchStats error:", result.error)
+      const result = await adminDb.getProjectCount()
+
+      if (result.success) {
+        setProjectCount(result.data)
+      } else {
+        console.warn("Failed to fetch project count:", result.error)
+      }
+
       setLoading(false)
     }
 

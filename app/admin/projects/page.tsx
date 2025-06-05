@@ -18,9 +18,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import type { Project } from "@/types"
-import { hasSupabaseConfig, safeSupabaseOperation, safeAuth } from "@/lib/supabase" // Added safeAuth
+import { adminDb, hasSupabaseConfig } from "@/lib/admin-auth"
 import AdminLayout from "../admin-layout"
-import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -37,42 +36,20 @@ export default function ProjectsPage() {
       return
     }
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        const {
-          data: { user },
-          error: authError,
-        } = await safeAuth.getUser() // Use safeAuth
-        if (authError || !user) {
-          throw new Error(authError?.message || "Authentication required")
-        }
-        const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
-        if (error) throw new Error(`Database error: ${error.message}`)
-        return data || []
-      },
-      [],
-      "Fetch admin projects",
-    )
+    const result = await adminDb.getProjects()
 
-    if (result.error) {
+    if (!result.success) {
       toast.error(`Failed to load projects: ${result.error}`)
     }
+
     setProjects(result.data)
     setLoading(false)
   }
 
   async function deleteProject(id: string) {
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        const { error } = await client.from("projects").delete().eq("id", id)
-        if (error) throw error
-        return true
-      },
-      false,
-      "Delete project",
-    )
+    const result = await adminDb.deleteProject(id)
 
-    if (result.error) {
+    if (!result.success) {
       toast.error(`Failed to delete project: ${result.error}`)
     } else {
       setProjects(projects.filter((project) => project.id !== id))

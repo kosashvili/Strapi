@@ -2,19 +2,40 @@
 
 import type React from "react"
 
-import { useAuth } from "@/components/auth-provider"
-import { hasSupabaseConfig } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { adminAuth, hasSupabaseConfig } from "@/lib/admin-auth"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
 
 interface AdminLayoutProps {
   children: React.ReactNode
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { user, loading, signOut } = useAuth()
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
   const pathname = usePathname()
+
+  useEffect(() => {
+    // If on login page, don't check auth
+    if (pathname === "/admin/login") {
+      setLoading(false)
+      return
+    }
+
+    // Check if logged in
+    if (!adminAuth.isLoggedIn()) {
+      router.push("/admin/login")
+      return
+    }
+
+    // Get user info
+    const userInfo = adminAuth.getUser()
+    setUser(userInfo)
+    setLoading(false)
+  }, [pathname, router])
 
   // If on login page, just render children
   if (pathname === "/admin/login") {
@@ -55,7 +76,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     )
   }
 
-  // If loading or not authenticated, show loading state
+  // If loading, show loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
@@ -64,13 +85,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     )
   }
 
-  // If not authenticated, redirect will happen in AuthProvider
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
-        <p>Redirecting to login...</p>
-      </div>
-    )
+  // Handle sign out
+  const handleSignOut = async () => {
+    await adminAuth.logout()
+    router.push("/admin/login")
   }
 
   return (
@@ -83,7 +101,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={signOut}
+              onClick={handleSignOut}
               className="border-gray-700 text-gray-300 hover:bg-gray-800"
             >
               Logout
