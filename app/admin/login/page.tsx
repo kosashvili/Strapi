@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { supabase, hasSupabaseConfig } from "@/lib/supabase"
+import { safeAuth, hasSupabaseConfig } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +27,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!hasSupabaseConfig || !supabase) {
+    if (!hasSupabaseConfig) {
       setError("Authentication is not available. Please configure Supabase.")
       return
     }
@@ -36,7 +36,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await safeAuth.signInWithPassword({
         email,
         password,
       })
@@ -45,7 +45,7 @@ export default function LoginPage() {
         throw error
       }
 
-      if (data.user) {
+      if (data?.user) {
         router.push("/admin")
         router.refresh()
       }

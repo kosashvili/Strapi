@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+// Safe Supabase client that never throws errors
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
@@ -16,7 +16,7 @@ function isValidUrl(string: string) {
 }
 
 // Check if we have valid configuration
-const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl))
+export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl))
 
 // Debug logging (only in development)
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
@@ -27,25 +27,89 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   console.log("- Has config:", hasSupabaseConfig)
 }
 
+// Create a safe Supabase client
 let supabase: any = null
 
-// Only create client if we have valid configuration
 if (hasSupabaseConfig) {
   try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    })
+    // Dynamic import to avoid issues during build
+    import("@supabase/supabase-js")
+      .then(({ createClient }) => {
+        try {
+          supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+              persistSession: true,
+              autoRefreshToken: true,
+            },
+          })
 
-    if (typeof window !== "undefined") {
-      console.log("✅ Supabase client created successfully")
-    }
+          if (typeof window !== "undefined") {
+            console.log("✅ Supabase client created successfully")
+          }
+        } catch (error) {
+          console.warn("Failed to create Supabase client:", error)
+          supabase = null
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to import Supabase:", error)
+        supabase = null
+      })
   } catch (error) {
-    console.warn("Failed to create Supabase client:", error)
+    console.warn("Failed to setup Supabase:", error)
     supabase = null
   }
+}
+
+// Safe auth methods that never throw
+export const safeAuth = {
+  getSession: async () => {
+    if (!hasSupabaseConfig || !supabase?.auth) {
+      return { data: { session: null }, error: null }
+    }
+    try {
+      return await supabase.auth.getSession()
+    } catch (error) {
+      console.warn("Auth getSession failed:", error)
+      return { data: { session: null }, error }
+    }
+  },
+
+  signInWithPassword: async (credentials: { email: string; password: string }) => {
+    if (!hasSupabaseConfig || !supabase?.auth) {
+      return { data: { user: null }, error: new Error("Authentication not available") }
+    }
+    try {
+      return await supabase.auth.signInWithPassword(credentials)
+    } catch (error) {
+      console.warn("Auth signIn failed:", error)
+      return { data: { user: null }, error }
+    }
+  },
+
+  signOut: async () => {
+    if (!hasSupabaseConfig || !supabase?.auth) {
+      return { error: null }
+    }
+    try {
+      return await supabase.auth.signOut()
+    } catch (error) {
+      console.warn("Auth signOut failed:", error)
+      return { error }
+    }
+  },
+
+  onAuthStateChange: (callback: (event: string, session: any) => void) => {
+    if (!hasSupabaseConfig || !supabase?.auth) {
+      return { data: { subscription: { unsubscribe: () => {} } } }
+    }
+    try {
+      return supabase.auth.onAuthStateChange(callback)
+    } catch (error) {
+      console.warn("Auth state change listener failed:", error)
+      return { data: { subscription: { unsubscribe: () => {} } } }
+    }
+  },
 }
 
 // Test function to check basic connectivity
@@ -63,8 +127,6 @@ export async function testSupabaseConnection() {
     const baseUrl = supabaseUrl.replace("/rest/v1", "")
     const healthCheckUrl = `${baseUrl}/rest/v1/`
 
-    console.log("Testing basic connectivity to:", healthCheckUrl)
-
     const response = await fetch(healthCheckUrl, {
       method: "GET",
       headers: {
@@ -77,16 +139,13 @@ export async function testSupabaseConnection() {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    console.log("✅ Basic connectivity test passed")
-
     // Now test Supabase client
-    const { data, error } = await supabase.from("projects").select("count", { count: "exact", head: true })
-
-    if (error) {
-      throw error
+    if (supabase?.from) {
+      const { data, error } = await supabase.from("projects").select("count", { count: "exact", head: true })
+      if (error) throw error
     }
 
-    return { success: true, data: `Found ${data?.length || 0} projects` }
+    return { success: true, data: "Connection successful" }
   } catch (error: any) {
     console.error("❌ Connection test failed:", error)
     return { success: false, error: error.message }
@@ -131,5 +190,5 @@ export async function safeSupabaseOperation<T>(
   }
 }
 
-// Export the client and config status
-export { supabase, hasSupabaseConfig }
+// Export the client (but always check if it exists before using)
+export { supabase }

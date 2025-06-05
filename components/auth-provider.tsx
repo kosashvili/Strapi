@@ -4,7 +4,7 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { supabase, hasSupabaseConfig } from "@/lib/supabase"
+import { safeAuth, hasSupabaseConfig } from "@/lib/supabase"
 import type { User } from "@/types"
 
 interface AuthContextType {
@@ -29,18 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getUser = async () => {
-      // If Supabase is not configured or client is not available, skip auth
-      if (!hasSupabaseConfig || !supabase) {
+      // If Supabase is not configured, skip auth
+      if (!hasSupabaseConfig) {
         console.log("Supabase not configured, skipping authentication")
         setLoading(false)
         return
       }
 
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
+        const { data, error } = await safeAuth.getSession()
 
         if (error) {
           console.warn("Auth session error:", error)
@@ -48,10 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        if (session?.user) {
+        if (data?.session?.user) {
           setUser({
-            id: session.user.id,
-            email: session.user.email || "",
+            id: data.session.user.id,
+            email: data.session.user.email || "",
           })
         } else if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
           router.push("/admin/login")
@@ -66,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getUser()
 
     // Only set up auth state listener if Supabase is available
-    if (!hasSupabaseConfig || !supabase) {
+    if (!hasSupabaseConfig) {
       setLoading(false)
       return
     }
@@ -74,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let subscription: any = null
 
     try {
-      const authListener = supabase.auth.onAuthStateChange((event: string, session: any) => {
+      const authListener = safeAuth.onAuthStateChange((event: string, session: any) => {
         if (session?.user) {
           setUser({
             id: session.user.id,
@@ -96,20 +93,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => {
-      if (subscription) {
+      if (subscription?.unsubscribe) {
         subscription.unsubscribe()
       }
     }
   }, [pathname, router])
 
   const signOut = async () => {
-    if (!hasSupabaseConfig || !supabase) {
+    if (!hasSupabaseConfig) {
       console.warn("Cannot sign out: Supabase not configured")
       return
     }
 
     try {
-      await supabase.auth.signOut()
+      await safeAuth.signOut()
+      setUser(null)
       router.push("/admin/login")
     } catch (error) {
       console.warn("Sign out error:", error)
