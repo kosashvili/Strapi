@@ -28,16 +28,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
+    let mounted = true
+    let authSubscription: any = null
+
     const getUser = async () => {
       // If Supabase is not configured, skip auth
       if (!hasSupabaseConfig) {
         console.log("Supabase not configured, skipping authentication")
-        setLoading(false)
+        if (mounted) {
+          setLoading(false)
+        }
         return
       }
 
       try {
         const { data, error } = await safeAuth.getSession()
+
+        if (!mounted) return
 
         if (error) {
           console.warn("Auth session error:", error)
@@ -56,45 +63,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.warn("Failed to get auth session:", error)
       } finally {
-        setLoading(false)
+        if (mounted) {
+          setLoading(false)
+        }
       }
     }
 
-    getUser()
+    const setupAuthListener = async () => {
+      if (!hasSupabaseConfig) {
+        return
+      }
 
-    // Only set up auth state listener if Supabase is available
-    if (!hasSupabaseConfig) {
-      setLoading(false)
-      return
-    }
+      try {
+        const authListener = safeAuth.onAuthStateChange((event: string, session: any) => {
+          if (!mounted) return
 
-    let subscription: any = null
-
-    try {
-      const authListener = safeAuth.onAuthStateChange((event: string, session: any) => {
-        if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || "",
-          })
-        } else {
-          setUser(null)
-          if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
-            router.push("/admin/login")
+          if (session?.user) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || "",
+            })
+          } else {
+            setUser(null)
+            if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+              router.push("/admin/login")
+            }
           }
-        }
-        setLoading(false)
-      })
+          setLoading(false)
+        })
 
-      subscription = authListener.data?.subscription
-    } catch (error) {
-      console.warn("Failed to set up auth listener:", error)
-      setLoading(false)
+        authSubscription = authListener.data?.subscription
+      } catch (error) {
+        console.warn("Failed to set up auth listener:", error)
+        if (mounted) {
+          setLoading(false)
+        }
+      }
     }
+
+    // Initialize auth
+    getUser()
+    setupAuthListener()
 
     return () => {
-      if (subscription?.unsubscribe) {
-        subscription.unsubscribe()
+      mounted = false
+      if (authSubscription?.unsubscribe) {
+        try {
+          authSubscription.unsubscribe()
+        } catch (error) {
+          console.warn("Error unsubscribing from auth:", error)
+        }
       }
     }
   }, [pathname, router])

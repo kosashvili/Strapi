@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SimpleStatus } from "@/components/simple-status"
 import { safeSupabaseOperation, supabase } from "@/lib/supabase"
-import { AdminLayout } from "./admin-layout"
+import AdminLayout from "./admin-layout"
 
 export default function AdminDashboard() {
   const [projectCount, setProjectCount] = useState<number | null>(null)

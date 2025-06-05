@@ -12,7 +12,7 @@ interface AdminLayoutProps {
   children: React.ReactNode
 }
 
-export function AdminLayout({ children }: AdminLayoutProps) {
+export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, loading, signOut } = useAuth()
   const pathname = usePathname()
 

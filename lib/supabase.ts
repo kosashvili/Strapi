@@ -29,58 +29,94 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
 
 // Create a safe Supabase client
 let supabase: any = null
+let supabaseInitialized = false
 
-if (hasSupabaseConfig) {
-  try {
-    // Dynamic import to avoid issues during build
-    import("@supabase/supabase-js")
-      .then(({ createClient }) => {
-        try {
-          supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-              persistSession: true,
-              autoRefreshToken: true,
-            },
-          })
-
-          if (typeof window !== "undefined") {
-            console.log("✅ Supabase client created successfully")
-          }
-        } catch (error) {
-          console.warn("Failed to create Supabase client:", error)
-          supabase = null
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to import Supabase:", error)
-        supabase = null
-      })
-  } catch (error) {
-    console.warn("Failed to setup Supabase:", error)
-    supabase = null
+// Initialize Supabase client safely
+async function initializeSupabase() {
+  if (supabaseInitialized || !hasSupabaseConfig) {
+    return supabase
   }
+
+  try {
+    const { createClient } = await import("@supabase/supabase-js")
+
+    supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    })
+
+    supabaseInitialized = true
+
+    if (typeof window !== "undefined") {
+      console.log("✅ Supabase client created successfully")
+    }
+
+    return supabase
+  } catch (error) {
+    console.warn("Failed to create Supabase client:", error)
+    supabaseInitialized = true // Mark as initialized to prevent retries
+    return null
+  }
+}
+
+// Initialize immediately if we have config
+if (hasSupabaseConfig && typeof window !== "undefined") {
+  initializeSupabase()
 }
 
 // Safe auth methods that never throw
 export const safeAuth = {
   getSession: async () => {
-    if (!hasSupabaseConfig || !supabase?.auth) {
+    if (!hasSupabaseConfig) {
       return { data: { session: null }, error: null }
     }
+
     try {
-      return await supabase.auth.getSession()
+      const client = await initializeSupabase()
+      if (!client?.auth) {
+        return { data: { session: null }, error: new Error("Auth not available") }
+      }
+
+      return await client.auth.getSession()
     } catch (error) {
       console.warn("Auth getSession failed:", error)
       return { data: { session: null }, error }
     }
   },
 
+  getUser: async () => {
+    if (!hasSupabaseConfig) {
+      return { data: { user: null }, error: null }
+    }
+
+    try {
+      const client = await initializeSupabase()
+      if (!client?.auth) {
+        return { data: { user: null }, error: new Error("Auth not available") }
+      }
+
+      return await client.auth.getUser()
+    } catch (error) {
+      console.warn("Auth getUser failed:", error)
+      return { data: { user: null }, error }
+    }
+  },
+
   signInWithPassword: async (credentials: { email: string; password: string }) => {
-    if (!hasSupabaseConfig || !supabase?.auth) {
+    if (!hasSupabaseConfig) {
       return { data: { user: null }, error: new Error("Authentication not available") }
     }
+
     try {
-      return await supabase.auth.signInWithPassword(credentials)
+      const client = await initializeSupabase()
+      if (!client?.auth) {
+        return { data: { user: null }, error: new Error("Auth not available") }
+      }
+
+      return await client.auth.signInWithPassword(credentials)
     } catch (error) {
       console.warn("Auth signIn failed:", error)
       return { data: { user: null }, error }
@@ -88,11 +124,17 @@ export const safeAuth = {
   },
 
   signOut: async () => {
-    if (!hasSupabaseConfig || !supabase?.auth) {
+    if (!hasSupabaseConfig) {
       return { error: null }
     }
+
     try {
-      return await supabase.auth.signOut()
+      const client = await initializeSupabase()
+      if (!client?.auth) {
+        return { error: null }
+      }
+
+      return await client.auth.signOut()
     } catch (error) {
       console.warn("Auth signOut failed:", error)
       return { error }
@@ -100,15 +142,37 @@ export const safeAuth = {
   },
 
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
-    if (!hasSupabaseConfig || !supabase?.auth) {
+    if (!hasSupabaseConfig) {
       return { data: { subscription: { unsubscribe: () => {} } } }
     }
-    try {
-      return supabase.auth.onAuthStateChange(callback)
-    } catch (error) {
-      console.warn("Auth state change listener failed:", error)
-      return { data: { subscription: { unsubscribe: () => {} } } }
+
+    // Return a promise that resolves to the subscription
+    const setupListener = async () => {
+      try {
+        const client = await initializeSupabase()
+        if (!client?.auth) {
+          return { data: { subscription: { unsubscribe: () => {} } } }
+        }
+
+        return client.auth.onAuthStateChange(callback)
+      } catch (error) {
+        console.warn("Auth state change listener failed:", error)
+        return { data: { subscription: { unsubscribe: () => {} } } }
+      }
     }
+
+    // For immediate use, return a dummy subscription
+    const dummySubscription = { data: { subscription: { unsubscribe: () => {} } } }
+
+    // Set up the real listener asynchronously
+    setupListener().then((realSubscription) => {
+      if (realSubscription && realSubscription.data?.subscription) {
+        // Replace the dummy with the real subscription
+        Object.assign(dummySubscription.data.subscription, realSubscription.data.subscription)
+      }
+    })
+
+    return dummySubscription
   },
 }
 
@@ -118,11 +182,12 @@ export async function testSupabaseConnection() {
     return { success: false, error: "Supabase not configured" }
   }
 
-  if (!supabase) {
-    return { success: false, error: "Supabase client not available" }
-  }
-
   try {
+    const client = await initializeSupabase()
+    if (!client) {
+      return { success: false, error: "Supabase client not available" }
+    }
+
     // First, test basic URL connectivity
     const baseUrl = supabaseUrl.replace("/rest/v1", "")
     const healthCheckUrl = `${baseUrl}/rest/v1/`
@@ -140,8 +205,8 @@ export async function testSupabaseConnection() {
     }
 
     // Now test Supabase client
-    if (supabase?.from) {
-      const { data, error } = await supabase.from("projects").select("count", { count: "exact", head: true })
+    if (client?.from) {
+      const { data, error } = await client.from("projects").select("count", { count: "exact", head: true })
       if (error) throw error
     }
 
@@ -159,7 +224,7 @@ export async function safeSupabaseOperation<T>(
   operationName = "operation",
 ): Promise<{ data: T; error: string | null; isUsingFallback: boolean }> {
   // If no Supabase config, return fallback immediately
-  if (!hasSupabaseConfig || !supabase) {
+  if (!hasSupabaseConfig) {
     return {
       data: fallback,
       error: "Supabase not configured",
@@ -168,6 +233,12 @@ export async function safeSupabaseOperation<T>(
   }
 
   try {
+    // Ensure client is initialized
+    const client = await initializeSupabase()
+    if (!client) {
+      throw new Error("Supabase client initialization failed")
+    }
+
     // Add timeout to prevent hanging
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Operation timeout")), 8000),
@@ -188,6 +259,11 @@ export async function safeSupabaseOperation<T>(
       isUsingFallback: true,
     }
   }
+}
+
+// Export a getter function for the client
+export async function getSupabaseClient() {
+  return await initializeSupabase()
 }
 
 // Export the client (but always check if it exists before using)
