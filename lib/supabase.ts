@@ -1,8 +1,42 @@
-// Completely static approach - no client-side Supabase
-export const hasSupabaseConfig = false // Force static mode
+import { createClient } from "@supabase/supabase-js"
+import type { Project } from "@/types"
 
-// Static fallback data
-const staticProjects = [
+// Environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+
+// Check if Supabase is configured
+export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.includes("supabase"))
+
+// Create a singleton Supabase client
+let supabaseInstance: ReturnType<typeof createClient> | null = null
+
+export function getSupabaseClient() {
+  if (!hasSupabaseConfig) {
+    console.warn("Supabase not configured")
+    return null
+  }
+
+  if (!supabaseInstance) {
+    try {
+      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      })
+    } catch (error) {
+      console.error("Failed to create Supabase client:", error)
+      return null
+    }
+  }
+
+  return supabaseInstance
+}
+
+// Fallback projects data
+export const fallbackProjects: Project[] = [
   {
     id: "1",
     title: "Neural Canvas",
@@ -46,30 +80,59 @@ const staticProjects = [
   },
 ]
 
-// Simple static operation that never fails
+// Safe database operations with fallback
 export async function safeSupabaseOperation<T>(
-  operation: any,
+  operation: (client: ReturnType<typeof createClient>) => Promise<T>,
   fallback: T,
   operationName = "operation",
 ): Promise<{ data: T; error: string | null; isUsingFallback: boolean }> {
-  console.log(`${operationName}: Using static data (no Supabase)`)
+  // Early return if no config
+  if (!hasSupabaseConfig) {
+    console.log(`${operationName}: Using fallback (no config)`)
+    return { data: fallback, error: null, isUsingFallback: true }
+  }
 
-  // Always return fallback data immediately
-  return {
-    data: fallback,
-    error: null,
-    isUsingFallback: true,
+  try {
+    const client = getSupabaseClient()
+
+    if (!client) {
+      throw new Error("Failed to create Supabase client")
+    }
+
+    // Execute operation with timeout
+    const operationPromise = operation(client)
+    const operationTimeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Operation timeout")), 8000),
+    )
+
+    const result = await Promise.race([operationPromise, operationTimeoutPromise])
+
+    console.log(`✅ ${operationName}: Success`)
+    return { data: result, error: null, isUsingFallback: false }
+  } catch (error: any) {
+    const errorMessage = error?.message || "Unknown error"
+    console.warn(`${operationName}: Failed (${errorMessage}), using fallback`)
+
+    return {
+      data: fallback,
+      error: errorMessage,
+      isUsingFallback: true,
+    }
   }
 }
 
-// No auth functionality at all
-export const safeAuth = {
-  getSession: async () => ({ data: { session: null }, error: null }),
-  onAuthStateChange: () => ({
-    data: { subscription: { unsubscribe: () => {} } },
-  }),
-  signOut: async () => ({ error: null }),
-}
+// Test Supabase connection
+export async function testSupabaseConnection(): Promise<boolean> {
+  if (!hasSupabaseConfig) return false
 
-// Export static projects for use
-export { staticProjects }
+  try {
+    const client = getSupabaseClient()
+    if (!client) return false
+
+    const { error } = await client.from("projects").select("count", { count: "exact", head: true })
+    return !error
+  } catch (error) {
+    console.error("Supabase connection test failed:", error)
+    return false
+  }
+}

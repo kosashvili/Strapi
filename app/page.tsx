@@ -5,22 +5,57 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import Link from "next/link"
-import { staticProjects } from "@/lib/supabase"
+import { safeSupabaseOperation, fallbackProjects } from "@/lib/supabase"
 import type { Project } from "@/types"
 import { DataStatus } from "@/components/data-status"
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [isUsingFallback, setIsUsingFallback] = useState(false)
+
+  async function fetchProjects() {
+    setLoading(true)
+
+    try {
+      const result = await safeSupabaseOperation(
+        async (client) => {
+          const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
+
+          if (error) throw new Error(error.message)
+          return Array.isArray(data) ? data : []
+        },
+        fallbackProjects,
+        "Fetch projects for homepage",
+      )
+
+      setProjects(result.data)
+      setIsUsingFallback(result.isUsingFallback)
+
+      if (result.isUsingFallback) {
+        console.log("🔄 Using fallback data:", result.error)
+      } else {
+        console.log("✅ Using live data from Supabase")
+      }
+    } catch (error) {
+      console.error("Error in fetchProjects:", error)
+      setProjects(fallbackProjects)
+      setIsUsingFallback(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // Simulate loading for better UX
-    const timer = setTimeout(() => {
-      setProjects(staticProjects)
+    // Wrap in try-catch to prevent any uncaught errors
+    try {
+      fetchProjects()
+    } catch (error) {
+      console.error("Error initializing projects:", error)
+      setProjects(fallbackProjects)
+      setIsUsingFallback(true)
       setLoading(false)
-    }, 500)
-
-    return () => clearTimeout(timer)
+    }
   }, [])
 
   return (
@@ -43,7 +78,7 @@ export default function HomePage() {
             <div className="h-px bg-gray-800 w-full"></div>
           </div>
 
-          <DataStatus isUsingFallback={true} />
+          <DataStatus isUsingFallback={isUsingFallback} />
 
           {/* Projects Grid */}
           <div className="space-y-6">
@@ -52,7 +87,7 @@ export default function HomePage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
                 <p className="text-gray-400">Loading projects...</p>
               </div>
-            ) : (
+            ) : projects.length > 0 ? (
               projects.map((project) => (
                 <Card key={project.id} className="bg-white text-black border-0 overflow-hidden">
                   <CardContent className="p-0">
@@ -84,7 +119,9 @@ export default function HomePage() {
                             asChild
                             className="bg-black text-white hover:bg-gray-800 font-mono uppercase tracking-wider"
                           >
-                            <Link href={project.visitUrl}>[VISIT]</Link>
+                            <Link href={project.visitUrl} target="_blank" rel="noopener noreferrer">
+                              [VISIT]
+                            </Link>
                           </Button>
                         </div>
                       </div>
@@ -92,6 +129,13 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               ))
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-4">No projects found</p>
+                <Button asChild>
+                  <Link href="/admin/login">Add your first project</Link>
+                </Button>
+              </div>
             )}
           </div>
         </div>

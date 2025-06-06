@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { adminDb } from "@/lib/admin-db"
+import { hasSupabaseConfig, testSupabaseConnection } from "@/lib/supabase"
 import { Plus, Database, AlertCircle, FolderOpen, HardDrive } from "lucide-react"
 import Link from "next/link"
 
@@ -13,10 +14,18 @@ export default function AdminDashboard() {
     loading: true,
     error: null as string | null,
   })
+  const [dbConnected, setDbConnected] = useState<boolean | null>(null)
 
   useEffect(() => {
     async function loadStats() {
       try {
+        // Test database connection
+        if (hasSupabaseConfig) {
+          const connected = await testSupabaseConnection()
+          setDbConnected(connected)
+        }
+
+        // Get projects
         const result = await adminDb.getProjects()
         setStats({
           totalProjects: result.data.length,
@@ -51,13 +60,25 @@ export default function AdminDashboard() {
       <Card className="bg-gray-900 border-gray-800">
         <CardContent className="p-6">
           <div className="flex items-center space-x-3">
-            <HardDrive size={20} className="text-green-400" />
-            <div>
-              <p className="font-medium">Local Storage Mode</p>
-              <p className="text-sm text-gray-400">
-                Data is stored locally in your browser. No external database required.
-              </p>
-            </div>
+            {hasSupabaseConfig ? (
+              <>
+                <Database size={20} className={dbConnected ? "text-green-400" : "text-yellow-400"} />
+                <div>
+                  <p className="font-medium">{dbConnected ? "Database Connected" : "Database Connection Issue"}</p>
+                  <p className="text-sm text-gray-400">
+                    {dbConnected ? "Live data from Supabase" : "Using local fallback (check Supabase connection)"}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <HardDrive size={20} className="text-blue-400" />
+                <div>
+                  <p className="font-medium">Local Storage Mode</p>
+                  <p className="text-sm text-gray-400">Data is stored locally in your browser</p>
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -111,20 +132,22 @@ export default function AdminDashboard() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-blue-900/20 border-blue-800">
-        <CardContent className="p-4">
-          <div className="flex items-start space-x-3">
-            <AlertCircle size={20} className="text-blue-400 mt-0.5" />
-            <div>
-              <p className="font-medium text-blue-200">Local Storage Mode</p>
-              <p className="text-sm text-blue-300 mt-1">
-                Your projects are stored locally in your browser. They will persist between sessions but won't be shared
-                across devices or browsers.
-              </p>
+      {!hasSupabaseConfig && (
+        <Card className="bg-blue-900/20 border-blue-800">
+          <CardContent className="p-4">
+            <div className="flex items-start space-x-3">
+              <AlertCircle size={20} className="text-blue-400 mt-0.5" />
+              <div>
+                <p className="font-medium text-blue-200">Local Storage Mode</p>
+                <p className="text-sm text-blue-300 mt-1">
+                  Your projects are stored locally in your browser. They will persist between sessions but won't be
+                  shared across devices or browsers.
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
