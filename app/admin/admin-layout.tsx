@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { adminAuth, hasSupabaseConfig } from "@/lib/admin-auth"
@@ -14,36 +13,49 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [authStatusLoading, setAuthStatusLoading] = useState(true)
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(true) // Assume true initially
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    // If on login page, don't check auth
+    setIsSupabaseConfigured(hasSupabaseConfig) // Set based on actual config
+
+    if (!hasSupabaseConfig) {
+      setAuthStatusLoading(false)
+      return
+    }
+
     if (pathname === "/admin/login") {
-      setLoading(false)
+      setAuthStatusLoading(false)
       return
     }
 
-    // Check if logged in
-    if (!adminAuth.isLoggedIn()) {
-      router.push("/admin/login")
-      return
+    async function checkAuth() {
+      const loggedIn = await adminAuth.isLoggedIn()
+      if (!loggedIn) {
+        router.push("/admin/login")
+      } else {
+        const userInfo = await adminAuth.getUser()
+        setUser(userInfo)
+        setAuthStatusLoading(false)
+      }
     }
-
-    // Get user info
-    const userInfo = adminAuth.getUser()
-    setUser(userInfo)
-    setLoading(false)
+    checkAuth()
   }, [pathname, router])
 
-  // If on login page, just render children
+  const handleSignOut = async () => {
+    await adminAuth.logout()
+    setUser(null) // Clear user state locally
+    router.push("/admin/login")
+    router.refresh() // Ensure fresh state on login page
+  }
+
   if (pathname === "/admin/login") {
     return <>{children}</>
   }
 
-  // If Supabase is not configured, show configuration message
-  if (!hasSupabaseConfig) {
+  if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-black text-white font-mono">
         <header className="border-b border-gray-800 py-4">
@@ -55,40 +67,35 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-2xl font-bold mb-4">Admin Panel Not Available</h2>
             <p className="text-gray-400 mb-6">
-              The admin panel requires Supabase configuration. Please set up your environment variables to enable
-              authentication and project management.
+              Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
             </p>
-            <div className="bg-gray-900 border border-gray-800 rounded p-4 text-left">
-              <p className="text-sm text-gray-300 mb-2">Required environment variables:</p>
-              <pre className="text-xs text-green-400">
-                NEXT_PUBLIC_SUPABASE_URL=your_supabase_url{"\n"}
-                NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-              </pre>
-            </div>
-            <div className="mt-6">
-              <Button asChild variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
-                <Link href="/">← Back to Homepage</Link>
-              </Button>
-            </div>
+            <Button asChild variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
+              <Link href="/">← Back to Homepage</Link>
+            </Button>
           </div>
         </div>
       </div>
     )
   }
 
-  // If loading, show loading state
-  if (loading) {
+  if (authStatusLoading) {
     return (
       <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
-        <p>Loading...</p>
+        <p>Authenticating...</p>
       </div>
     )
   }
 
-  // Handle sign out
-  const handleSignOut = async () => {
-    await adminAuth.logout()
+  // If not loading and not on login page, but user is null (should have been redirected)
+  // This is a fallback, redirect should happen in useEffect
+  if (!user && pathname !== "/admin/login") {
+    console.warn("AdminLayout: User is null but not on login page. Redirecting again.")
     router.push("/admin/login")
+    return (
+      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
+        <p>Redirecting to login...</p>
+      </div>
+    )
   }
 
   return (

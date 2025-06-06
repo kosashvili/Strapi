@@ -9,18 +9,40 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 // Check if we have valid configuration
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey)
 
+const adminStorageKey = "lightberry-admin-auth-token"
+
+const createAdminSupabaseClient = () => {
+  if (!hasSupabaseConfig) return null
+  try {
+    const client = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storageKey: adminStorageKey,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    })
+    if (!client) {
+      console.error("❌ Admin Auth: createClient returned null/undefined!")
+      return null
+    }
+    return client
+  } catch (error) {
+    console.error("❌ Admin Auth: Error during createClient:", error)
+    return null
+  }
+}
+
 // Create a simple admin auth helper
 export const adminAuth = {
   // Login function
   async login(email: string, password: string) {
-    if (!hasSupabaseConfig) {
-      return { success: false, error: "Supabase not configured" }
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) {
+      return { success: false, error: "Supabase client initialization failed for login" }
     }
 
     try {
-      // Create a fresh client just for this operation
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -30,22 +52,16 @@ export const adminAuth = {
         return { success: false, error: error.message }
       }
 
-      if (data?.session) {
-        // Store the session token in localStorage
-        if (typeof window !== "undefined") {
-          localStorage.setItem("adminToken", data.session.access_token)
-          localStorage.setItem(
-            "adminUser",
-            JSON.stringify({
-              id: data.user?.id,
-              email: data.user?.email,
-            }),
-          )
-        }
+      if (data?.session && data.user) {
+        // localStorage is managed by Supabase client with custom storageKey
         return { success: true }
       }
+      // Fallback for user info if needed, though Supabase client should handle session
+      if (data?.user && typeof window !== "undefined") {
+        localStorage.setItem("adminUserEmail", data.user.email || "N/A") // Example of manual storage if needed
+      }
 
-      return { success: false, error: "No session returned" }
+      return { success: false, error: "No session or user returned" }
     } catch (error: any) {
       return { success: false, error: error.message || "Login failed" }
     }
@@ -53,45 +69,62 @@ export const adminAuth = {
 
   // Logout function
   async logout() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("adminToken")
-      localStorage.removeItem("adminUser")
-    }
-
-    // Also try to sign out from Supabase if possible
-    if (hasSupabaseConfig) {
+    const supabase = createAdminSupabaseClient()
+    if (supabase) {
       try {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey)
         await supabase.auth.signOut()
       } catch (error) {
-        console.warn("Error during sign out:", error)
+        console.warn("Error during Supabase sign out:", error)
       }
     }
-
+    // Additional manual cleanup if any
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("adminUserEmail")
+    }
     return { success: true }
   },
 
   // Check if user is logged in
-  isLoggedIn() {
+  async isLoggedIn() {
     if (typeof window === "undefined") return false
-    return Boolean(localStorage.getItem("adminToken"))
+    if (!hasSupabaseConfig) return false
+
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) return false
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      return Boolean(session)
+    } catch (error) {
+      console.warn("isLoggedIn check failed:", error)
+      return false
+    }
   },
 
   // Get current user
-  getUser() {
+  async getUser() {
     if (typeof window === "undefined") return null
-    const userJson = localStorage.getItem("adminUser")
-    if (!userJson) return null
+    if (!hasSupabaseConfig) return null
+
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) return null
+
     try {
-      return JSON.parse(userJson)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      return user ? { id: user.id, email: user.email } : null
     } catch (error) {
+      console.warn("getUser check failed:", error)
       return null
     }
   },
 
   // Require authentication or redirect
-  requireAuth() {
-    if (typeof window !== "undefined" && !this.isLoggedIn()) {
+  async requireAuth() {
+    if (typeof window !== "undefined" && !(await this.isLoggedIn())) {
       redirect("/admin/login")
     }
   },
@@ -100,29 +133,14 @@ export const adminAuth = {
 // Create a database helper that uses the admin token
 export const adminDb = {
   async getProjects() {
-    if (!hasSupabaseConfig) {
-      return { success: false, data: [], error: "Supabase not configured" }
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) {
+      return { success: false, data: [], error: "Supabase client initialization failed for getProjects" }
     }
-
+    // Auth is handled by the client's stored session due to custom storageKey
     try {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-      // Get the admin token
-      const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null
-
-      if (!token) {
-        return { success: false, data: [], error: "Not authenticated" }
-      }
-
-      // Set the auth token for this request
-      supabase.auth.setSession({ access_token: token, refresh_token: "" })
-
       const { data, error } = await supabase.from("projects").select("*").order("created_at", { ascending: false })
-
-      if (error) {
-        return { success: false, data: [], error: error.message }
-      }
-
+      if (error) return { success: false, data: [], error: error.message }
       return { success: true, data: data || [] }
     } catch (error: any) {
       return { success: false, data: [], error: error.message || "Failed to fetch projects" }
@@ -130,29 +148,13 @@ export const adminDb = {
   },
 
   async deleteProject(id: string) {
-    if (!hasSupabaseConfig) {
-      return { success: false, error: "Supabase not configured" }
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) {
+      return { success: false, error: "Supabase client initialization failed for deleteProject" }
     }
-
     try {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-      // Get the admin token
-      const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null
-
-      if (!token) {
-        return { success: false, error: "Not authenticated" }
-      }
-
-      // Set the auth token for this request
-      supabase.auth.setSession({ access_token: token, refresh_token: "" })
-
       const { error } = await supabase.from("projects").delete().eq("id", id)
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
+      if (error) return { success: false, error: error.message }
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message || "Failed to delete project" }
@@ -160,29 +162,13 @@ export const adminDb = {
   },
 
   async getProjectCount() {
-    if (!hasSupabaseConfig) {
-      return { success: false, data: null, error: "Supabase not configured" }
+    const supabase = createAdminSupabaseClient()
+    if (!supabase) {
+      return { success: false, data: null, error: "Supabase client initialization failed for getProjectCount" }
     }
-
     try {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-      // Get the admin token
-      const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null
-
-      if (!token) {
-        return { success: false, data: null, error: "Not authenticated" }
-      }
-
-      // Set the auth token for this request
-      supabase.auth.setSession({ access_token: token, refresh_token: "" })
-
       const { count, error } = await supabase.from("projects").select("*", { count: "exact", head: true })
-
-      if (error) {
-        return { success: false, data: null, error: error.message }
-      }
-
+      if (error) return { success: false, data: null, error: error.message }
       return { success: true, data: count }
     } catch (error: any) {
       return { success: false, data: null, error: error.message || "Failed to get project count" }
