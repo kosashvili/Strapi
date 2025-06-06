@@ -1,195 +1,178 @@
-import { safeSupabaseOperation } from "@/lib/supabase"
 import type { Project } from "@/types"
-import type { SupabaseClient } from "@supabase/supabase-js"
+
+const STORAGE_KEY = "lightberry_projects"
+
+// Get projects from localStorage or use defaults
+function getStoredProjects(): Project[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      return Array.isArray(parsed) ? parsed : []
+    }
+  } catch (error) {
+    console.warn("Failed to parse stored projects:", error)
+  }
+
+  // Return default projects if nothing stored
+  return [
+    {
+      id: "1",
+      title: "Neural Canvas",
+      description:
+        "AI-powered drawing tool that transforms sketches into digital art using machine learning algorithms.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Neural+Canvas",
+      visitUrl: "https://example.com/neural-canvas",
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "2",
+      title: "Quantum Todo",
+      description: "Task management app with probabilistic scheduling and uncertainty-based priority systems.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Quantum+Todo",
+      visitUrl: "https://example.com/quantum-todo",
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "3",
+      title: "Syntax Poetry",
+      description:
+        "Code-to-poetry generator that converts programming syntax into readable verse and artistic expressions.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Syntax+Poetry",
+      visitUrl: "https://example.com/syntax-poetry",
+      created_at: new Date().toISOString(),
+    },
+  ]
+}
+
+// Save projects to localStorage
+function saveProjects(projects: Project[]): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+  } catch (error) {
+    console.warn("Failed to save projects:", error)
+  }
+}
+
+// Generate a simple ID
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
 
 export const adminDb = {
-  // Get all projects with defensive error handling
+  // Get all projects
   async getProjects(): Promise<{ success: boolean; data: Project[]; error?: string }> {
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        // Defensive check before using client
-        if (!client || !client.from) {
-          throw new Error("Invalid client")
-        }
-
-        const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
-
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-
-        // Ensure data is an array
-        return Array.isArray(data) ? data : []
-      },
-      [], // Fallback to empty array
-      "Get projects",
-    )
-
-    return {
-      success: !result.isUsingFallback,
-      data: result.data,
-      error: result.error || undefined,
+    try {
+      const projects = getStoredProjects()
+      return { success: true, data: projects }
+    } catch (error) {
+      return { success: false, data: [], error: "Failed to load projects" }
     }
   },
 
-  // Create a new project with validation
+  // Create a new project
   async createProject(
     project: Omit<Project, "id" | "created_at">,
   ): Promise<{ success: boolean; data?: Project; error?: string }> {
-    // Validate input
-    if (!project.title || !project.description || !project.visitUrl) {
-      return {
-        success: false,
-        error: "Title, description, and visit URL are required",
+    try {
+      if (!project.title || !project.description || !project.visitUrl) {
+        return { success: false, error: "Title, description, and visit URL are required" }
       }
-    }
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        if (!client || !client.from) {
-          throw new Error("Invalid client")
-        }
+      const projects = getStoredProjects()
+      const newProject: Project = {
+        id: generateId(),
+        title: project.title.trim(),
+        description: project.description.trim(),
+        imageUrl: project.imageUrl?.trim() || "",
+        visitUrl: project.visitUrl.trim(),
+        created_at: new Date().toISOString(),
+      }
 
-        const { data, error } = await client
-          .from("projects")
-          .insert([
-            {
-              title: project.title.trim(),
-              description: project.description.trim(),
-              imageUrl: project.imageUrl?.trim() || null,
-              visitUrl: project.visitUrl.trim(),
-            },
-          ])
-          .select()
-          .single()
+      projects.unshift(newProject) // Add to beginning
+      saveProjects(projects)
 
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-
-        return data
-      },
-      null,
-      "Create project",
-    )
-
-    return {
-      success: !result.isUsingFallback,
-      data: result.data || undefined,
-      error: result.error || undefined,
+      return { success: true, data: newProject }
+    } catch (error) {
+      return { success: false, error: "Failed to create project" }
     }
   },
 
-  // Update a project with validation
+  // Update a project
   async updateProject(
     id: string,
     updates: Partial<Omit<Project, "id" | "created_at">>,
   ): Promise<{ success: boolean; data?: Project; error?: string }> {
-    if (!id) {
-      return {
-        success: false,
-        error: "Project ID is required",
+    try {
+      if (!id) {
+        return { success: false, error: "Project ID is required" }
       }
-    }
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        if (!client || !client.from) {
-          throw new Error("Invalid client")
-        }
+      const projects = getStoredProjects()
+      const projectIndex = projects.findIndex((p) => p.id === id)
 
-        // Clean up the updates object
-        const cleanUpdates: any = {}
-        if (updates.title) cleanUpdates.title = updates.title.trim()
-        if (updates.description) cleanUpdates.description = updates.description.trim()
-        if (updates.visitUrl) cleanUpdates.visitUrl = updates.visitUrl.trim()
-        if (updates.imageUrl !== undefined) {
-          cleanUpdates.imageUrl = updates.imageUrl?.trim() || null
-        }
+      if (projectIndex === -1) {
+        return { success: false, error: "Project not found" }
+      }
 
-        const { data, error } = await client.from("projects").update(cleanUpdates).eq("id", id).select().single()
+      const updatedProject = {
+        ...projects[projectIndex],
+        ...updates,
+        id, // Ensure ID doesn't change
+        created_at: projects[projectIndex].created_at, // Preserve creation date
+      }
 
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
+      projects[projectIndex] = updatedProject
+      saveProjects(projects)
 
-        return data
-      },
-      null,
-      "Update project",
-    )
-
-    return {
-      success: !result.isUsingFallback,
-      data: result.data || undefined,
-      error: result.error || undefined,
+      return { success: true, data: updatedProject }
+    } catch (error) {
+      return { success: false, error: "Failed to update project" }
     }
   },
 
   // Delete a project
   async deleteProject(id: string): Promise<{ success: boolean; error?: string }> {
-    if (!id) {
-      return {
-        success: false,
-        error: "Project ID is required",
+    try {
+      if (!id) {
+        return { success: false, error: "Project ID is required" }
       }
-    }
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        if (!client || !client.from) {
-          throw new Error("Invalid client")
-        }
+      const projects = getStoredProjects()
+      const filteredProjects = projects.filter((p) => p.id !== id)
 
-        const { error } = await client.from("projects").delete().eq("id", id)
+      if (filteredProjects.length === projects.length) {
+        return { success: false, error: "Project not found" }
+      }
 
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-
-        return true
-      },
-      false,
-      "Delete project",
-    )
-
-    return {
-      success: !result.isUsingFallback,
-      error: result.error || undefined,
+      saveProjects(filteredProjects)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: "Failed to delete project" }
     }
   },
 
   // Get a single project
   async getProject(id: string): Promise<{ success: boolean; data?: Project; error?: string }> {
-    if (!id) {
-      return {
-        success: false,
-        error: "Project ID is required",
+    try {
+      if (!id) {
+        return { success: false, error: "Project ID is required" }
       }
-    }
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        if (!client || !client.from) {
-          throw new Error("Invalid client")
-        }
+      const projects = getStoredProjects()
+      const project = projects.find((p) => p.id === id)
 
-        const { data, error } = await client.from("projects").select("*").eq("id", id).single()
+      if (!project) {
+        return { success: false, error: "Project not found" }
+      }
 
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-
-        return data
-      },
-      null,
-      "Get project",
-    )
-
-    return {
-      success: !result.isUsingFallback,
-      data: result.data || undefined,
-      error: result.error || undefined,
+      return { success: true, data: project }
+    } catch (error) {
+      return { success: false, error: "Failed to get project" }
     }
   },
 }

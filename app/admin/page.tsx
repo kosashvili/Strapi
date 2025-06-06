@@ -4,8 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { adminDb } from "@/lib/admin-db"
-import { hasSupabaseConfig } from "@/lib/supabase"
-import { Plus, Database, AlertCircle, FolderOpen } from "lucide-react"
+import { Plus, Database, AlertCircle, FolderOpen, HardDrive } from "lucide-react"
 import Link from "next/link"
 
 export default function AdminDashboard() {
@@ -52,11 +51,11 @@ export default function AdminDashboard() {
       <Card className="bg-gray-900 border-gray-800">
         <CardContent className="p-6">
           <div className="flex items-center space-x-3">
-            <Database size={20} className={hasSupabaseConfig ? "text-green-400" : "text-yellow-400"} />
+            <HardDrive size={20} className="text-green-400" />
             <div>
-              <p className="font-medium">{hasSupabaseConfig ? "Database Connected" : "Demo Mode"}</p>
+              <p className="font-medium">Local Storage Mode</p>
               <p className="text-sm text-gray-400">
-                {hasSupabaseConfig ? "Live data from Supabase" : "Configure Supabase for live data"}
+                Data is stored locally in your browser. No external database required.
               </p>
             </div>
           </div>
@@ -110,6 +109,22 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Info Card */}
+      <Card className="bg-blue-900/20 border-blue-800">
+        <CardContent className="p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle size={20} className="text-blue-400 mt-0.5" />
+            <div>
+              <p className="font-medium text-blue-200">Local Storage Mode</p>
+              <p className="text-sm text-blue-300 mt-1">
+                Your projects are stored locally in your browser. They will persist between sessions but won't be shared
+                across devices or browsers.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -1,151 +1,75 @@
-// Ultra-defensive Supabase client for public data only
-import type { SupabaseClient } from "@supabase/supabase-js"
+// Completely static approach - no client-side Supabase
+export const hasSupabaseConfig = false // Force static mode
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+// Static fallback data
+const staticProjects = [
+  {
+    id: "1",
+    title: "Neural Canvas",
+    description: "AI-powered drawing tool that transforms sketches into digital art using machine learning algorithms.",
+    imageUrl: "/placeholder.svg?height=200&width=300&text=Neural+Canvas",
+    visitUrl: "https://example.com/neural-canvas",
+    created_at: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: "2",
+    title: "Quantum Todo",
+    description: "Task management app with probabilistic scheduling and uncertainty-based priority systems.",
+    imageUrl: "/placeholder.svg?height=200&width=300&text=Quantum+Todo",
+    visitUrl: "https://example.com/quantum-todo",
+    created_at: "2024-01-02T00:00:00Z",
+  },
+  {
+    id: "3",
+    title: "Syntax Poetry",
+    description:
+      "Code-to-poetry generator that converts programming syntax into readable verse and artistic expressions.",
+    imageUrl: "/placeholder.svg?height=200&width=300&text=Syntax+Poetry",
+    visitUrl: "https://example.com/syntax-poetry",
+    created_at: "2024-01-03T00:00:00Z",
+  },
+  {
+    id: "4",
+    title: "Memory Palace VR",
+    description: "Virtual reality memory training application using spatial mnemonics and 3D environments.",
+    imageUrl: "/placeholder.svg?height=200&width=300&text=Memory+Palace+VR",
+    visitUrl: "https://example.com/memory-palace",
+    created_at: "2024-01-04T00:00:00Z",
+  },
+  {
+    id: "5",
+    title: "Chaos Calculator",
+    description: "Mathematical visualization tool for exploring fractal patterns and chaotic systems in real-time.",
+    imageUrl: "/placeholder.svg?height=200&width=300&text=Chaos+Calculator",
+    visitUrl: "https://example.com/chaos-calculator",
+    created_at: "2024-01-05T00:00:00Z",
+  },
+]
 
-function isValidUrl(string: string) {
-  if (!string) return false
-  try {
-    const url = new URL(string)
-    return url.protocol === "https:" && url.hostname.includes("supabase")
-  } catch (_) {
-    return false
-  }
-}
-
-export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl))
-
-// Ultra-defensive client creation with extensive error checking
-export async function createSupabaseClient(): Promise<SupabaseClient | null> {
-  if (!hasSupabaseConfig) {
-    console.warn("Supabase not configured")
-    return null
-  }
-
-  try {
-    const { createClient } = await import("@supabase/supabase-js")
-
-    // Create client with minimal configuration to avoid auth issues
-    const client = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: false, // Disable session persistence to avoid auth issues
-        autoRefreshToken: false, // Disable auto refresh
-        detectSessionInUrl: false, // Disable URL session detection
-      },
-      global: {
-        headers: {
-          "X-Client-Info": "lightberry-public-client",
-        },
-      },
-    })
-
-    // Defensive check - ensure client and its properties exist
-    if (!client) {
-      console.error("Supabase createClient returned null/undefined")
-      return null
-    }
-
-    // Additional safety check for client structure
-    if (typeof client !== "object") {
-      console.error("Supabase client is not an object")
-      return null
-    }
-
-    // Check if client has the expected methods
-    if (!client.from || typeof client.from !== "function") {
-      console.error("Supabase client missing 'from' method")
-      return null
-    }
-
-    console.log("✅ Supabase client created successfully")
-    return client
-  } catch (error) {
-    console.error("Failed to create Supabase client:", error)
-    return null
-  }
-}
-
-// Ultra-safe wrapper for database operations with extensive error handling
+// Simple static operation that never fails
 export async function safeSupabaseOperation<T>(
-  operation: (client: SupabaseClient) => Promise<T>,
+  operation: any,
   fallback: T,
   operationName = "operation",
 ): Promise<{ data: T; error: string | null; isUsingFallback: boolean }> {
-  // Early return if no config
-  if (!hasSupabaseConfig) {
-    console.log(`${operationName}: Using fallback (no config)`)
-    return { data: fallback, error: "Supabase not configured", isUsingFallback: true }
-  }
+  console.log(`${operationName}: Using static data (no Supabase)`)
 
-  let client: SupabaseClient | null = null
-
-  try {
-    // Create client with timeout
-    const clientPromise = createSupabaseClient()
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error("Client creation timeout")), 5000),
-    )
-
-    client = await Promise.race([clientPromise, timeoutPromise])
-
-    if (!client) {
-      throw new Error("Failed to create Supabase client")
-    }
-
-    // Defensive check before using client
-    if (!client || typeof client !== "object" || !client.from) {
-      throw new Error("Invalid Supabase client structure")
-    }
-
-    // Execute operation with timeout
-    const operationPromise = operation(client)
-    const operationTimeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Operation timeout")), 8000),
-    )
-
-    const result = await Promise.race([operationPromise, operationTimeoutPromise])
-
-    console.log(`✅ ${operationName}: Success`)
-    return { data: result, error: null, isUsingFallback: false }
-  } catch (error: any) {
-    const errorMessage = error?.message || "Unknown error"
-    console.warn(`${operationName}: Failed (${errorMessage}), using fallback`)
-
-    return {
-      data: fallback,
-      error: errorMessage,
-      isUsingFallback: true,
-    }
-  } finally {
-    // Clean up client if needed (though not necessary for our use case)
-    client = null
+  // Always return fallback data immediately
+  return {
+    data: fallback,
+    error: null,
+    isUsingFallback: true,
   }
 }
 
-// Completely remove any auth-related functionality to avoid destructuring errors
+// No auth functionality at all
 export const safeAuth = {
-  // Stub methods that always return safe defaults
-  getSession: async () => {
-    console.warn("Auth not available in public client")
-    return { data: { session: null }, error: null }
-  },
-
-  onAuthStateChange: () => {
-    console.warn("Auth state change not available in public client")
-    return {
-      data: {
-        subscription: {
-          unsubscribe: () => {
-            console.log("Auth subscription unsubscribed (stub)")
-          },
-        },
-      },
-    }
-  },
-
-  signOut: async () => {
-    console.warn("Sign out not available in public client")
-    return { error: null }
-  },
+  getSession: async () => ({ data: { session: null }, error: null }),
+  onAuthStateChange: () => ({
+    data: { subscription: { unsubscribe: () => {} } },
+  }),
+  signOut: async () => ({ error: null }),
 }
+
+// Export static projects for use
+export { staticProjects }

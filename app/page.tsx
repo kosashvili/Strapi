@@ -5,111 +5,22 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import Link from "next/link"
-import { safeSupabaseOperation } from "@/lib/supabase"
+import { staticProjects } from "@/lib/supabase"
 import type { Project } from "@/types"
 import { DataStatus } from "@/components/data-status"
-import type { SupabaseClient } from "@supabase/supabase-js"
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
-  const [isUsingFallback, setIsUsingFallback] = useState(false)
-
-  // Fallback projects data
-  const fallbackProjects: Project[] = [
-    {
-      id: "1",
-      title: "Neural Canvas",
-      description:
-        "AI-powered drawing tool that transforms sketches into digital art using machine learning algorithms.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Neural+Canvas",
-      visitUrl: "https://example.com/neural-canvas",
-    },
-    {
-      id: "2",
-      title: "Quantum Todo",
-      description: "Task management app with probabilistic scheduling and uncertainty-based priority systems.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Quantum+Todo",
-      visitUrl: "https://example.com/quantum-todo",
-    },
-    {
-      id: "3",
-      title: "Syntax Poetry",
-      description:
-        "Code-to-poetry generator that converts programming syntax into readable verse and artistic expressions.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Syntax+Poetry",
-      visitUrl: "https://example.com/syntax-poetry",
-    },
-    {
-      id: "4",
-      title: "Memory Palace VR",
-      description: "Virtual reality memory training application using spatial mnemonics and 3D environments.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Memory+Palace+VR",
-      visitUrl: "https://example.com/memory-palace",
-    },
-    {
-      id: "5",
-      title: "Chaos Calculator",
-      description: "Mathematical visualization tool for exploring fractal patterns and chaotic systems in real-time.",
-      imageUrl: "/placeholder.svg?height=200&width=300&text=Chaos+Calculator",
-      visitUrl: "https://example.com/chaos-calculator",
-    },
-  ]
-
-  async function fetchProjects() {
-    setLoading(true)
-
-    try {
-      const result = await safeSupabaseOperation(
-        async (client: SupabaseClient) => {
-          // Defensive checks
-          if (!client) {
-            throw new Error("Client is null")
-          }
-
-          if (!client.from || typeof client.from !== "function") {
-            throw new Error("Client.from is not available")
-          }
-
-          const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
-
-          if (error) {
-            throw new Error(`Database error: ${error.message}`)
-          }
-
-          return Array.isArray(data) ? data : []
-        },
-        fallbackProjects,
-        "Fetch projects",
-      )
-
-      setProjects(result.data)
-      setIsUsingFallback(result.isUsingFallback)
-
-      if (result.isUsingFallback) {
-        console.log("🔄 Using fallback data:", result.error)
-      } else {
-        console.log("✅ Using live data from Supabase")
-      }
-    } catch (error) {
-      console.error("Error in fetchProjects:", error)
-      setProjects(fallbackProjects)
-      setIsUsingFallback(true)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
-    // Wrap in try-catch to prevent any uncaught errors
-    try {
-      fetchProjects()
-    } catch (error) {
-      console.error("Error initializing projects:", error)
-      setProjects(fallbackProjects)
-      setIsUsingFallback(true)
+    // Simulate loading for better UX
+    const timer = setTimeout(() => {
+      setProjects(staticProjects)
       setLoading(false)
-    }
+    }, 500)
+
+    return () => clearTimeout(timer)
   }, [])
 
   return (
@@ -132,12 +43,13 @@ export default function HomePage() {
             <div className="h-px bg-gray-800 w-full"></div>
           </div>
 
-          <DataStatus isUsingFallback={isUsingFallback} />
+          <DataStatus isUsingFallback={true} />
 
           {/* Projects Grid */}
           <div className="space-y-6">
             {loading ? (
               <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
                 <p className="text-gray-400">Loading projects...</p>
               </div>
             ) : (
