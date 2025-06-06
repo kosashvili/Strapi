@@ -59,31 +59,57 @@ export default function HomePage() {
   async function fetchProjects() {
     setLoading(true)
 
-    const result = await safeSupabaseOperation(
-      async (client: SupabaseClient) => {
-        const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
-        if (error) {
-          throw new Error(`Database error: ${error.message}`)
-        }
-        return data || []
-      },
-      fallbackProjects,
-      "Fetch projects",
-    )
+    try {
+      const result = await safeSupabaseOperation(
+        async (client: SupabaseClient) => {
+          // Defensive checks
+          if (!client) {
+            throw new Error("Client is null")
+          }
 
-    setProjects(result.data)
-    setIsUsingFallback(result.isUsingFallback)
-    setLoading(false)
+          if (!client.from || typeof client.from !== "function") {
+            throw new Error("Client.from is not available")
+          }
 
-    if (result.isUsingFallback) {
-      console.log("🔄 Using fallback data:", result.error)
-    } else {
-      console.log("✅ Using live data from Supabase")
+          const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
+
+          if (error) {
+            throw new Error(`Database error: ${error.message}`)
+          }
+
+          return Array.isArray(data) ? data : []
+        },
+        fallbackProjects,
+        "Fetch projects",
+      )
+
+      setProjects(result.data)
+      setIsUsingFallback(result.isUsingFallback)
+
+      if (result.isUsingFallback) {
+        console.log("🔄 Using fallback data:", result.error)
+      } else {
+        console.log("✅ Using live data from Supabase")
+      }
+    } catch (error) {
+      console.error("Error in fetchProjects:", error)
+      setProjects(fallbackProjects)
+      setIsUsingFallback(true)
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchProjects()
+    // Wrap in try-catch to prevent any uncaught errors
+    try {
+      fetchProjects()
+    } catch (error) {
+      console.error("Error initializing projects:", error)
+      setProjects(fallbackProjects)
+      setIsUsingFallback(true)
+      setLoading(false)
+    }
   }, [])
 
   return (
@@ -127,6 +153,9 @@ export default function HomePage() {
                             alt={project.title}
                             fill
                             className="object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.svg?height=200&width=300&text=Image+Error"
+                            }}
                           />
                         </div>
                       </div>
