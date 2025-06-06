@@ -5,16 +5,18 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { adminAuth } from "@/lib/admin-auth"
+import { hasSupabaseConfig } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import { LogOut, Home, FolderOpen } from "lucide-react"
+import { LogOut, Home, FolderOpen, User } from "lucide-react"
 import Link from "next/link"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [user, setUser] = useState<{ email: string } | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
@@ -26,21 +28,61 @@ export default function AdminLayout({
       return
     }
 
-    // Check authentication
-    if (!adminAuth.isAuthenticated()) {
+    // If Supabase is not configured, redirect to login to show error
+    if (!hasSupabaseConfig) {
       router.push("/admin/login")
       return
     }
 
-    // Get user info
-    const currentUser = adminAuth.getCurrentUser()
-    setUser(currentUser)
-    setLoading(false)
+    async function checkAuth() {
+      try {
+        // Check if user is authenticated
+        const isAuth = await adminAuth.isAuthenticated()
+
+        if (!isAuth) {
+          router.push("/admin/login")
+          return
+        }
+
+        // Get current user
+        const currentUser = await adminAuth.getCurrentUser()
+        setUser(currentUser)
+      } catch (error) {
+        console.error("Auth check failed:", error)
+        router.push("/admin/login")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
+
+    // Listen to auth state changes
+    const {
+      data: { subscription },
+    } = adminAuth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        setUser(null)
+        router.push("/admin/login")
+      } else if (event === "SIGNED_IN" && session?.user) {
+        setUser(session.user)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [pathname, router])
 
-  const handleLogout = () => {
-    adminAuth.logout()
-    router.push("/admin/login")
+  const handleLogout = async () => {
+    try {
+      await adminAuth.signOut()
+      router.push("/admin/login")
+    } catch (error) {
+      console.error("Logout failed:", error)
+      // Force redirect even if logout fails
+      router.push("/admin/login")
+    }
   }
 
   // Show login page without layout
@@ -95,7 +137,10 @@ export default function AdminLayout({
             </div>
 
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-400 hidden sm:block">{user?.email}</span>
+              <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-400">
+                <User size={16} />
+                <span>{user?.email}</span>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
