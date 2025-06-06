@@ -1,9 +1,10 @@
 "use client"
 
 import type React from "react"
+
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { adminAuth, hasSupabaseConfig } from "@/lib/admin-auth"
+import { adminAuth } from "@/lib/admin-auth-simple"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
@@ -13,89 +14,46 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [user, setUser] = useState<any>(null)
-  const [authStatusLoading, setAuthStatusLoading] = useState(true)
-  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(true) // Assume true initially
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    setIsSupabaseConfigured(hasSupabaseConfig) // Set based on actual config
-
-    if (!hasSupabaseConfig) {
-      setAuthStatusLoading(false)
-      return
-    }
-
+    // If on login page, don't check auth
     if (pathname === "/admin/login") {
-      setAuthStatusLoading(false)
+      setLoading(false)
       return
     }
 
-    async function checkAuth() {
-      const loggedIn = await adminAuth.isLoggedIn()
-      if (!loggedIn) {
-        router.push("/admin/login")
-      } else {
-        const userInfo = await adminAuth.getUser()
-        setUser(userInfo)
-        setAuthStatusLoading(false)
-      }
+    // Check if logged in
+    if (!adminAuth.isLoggedIn()) {
+      router.push("/admin/login")
+      return
     }
-    checkAuth()
+
+    // Get user info
+    const userInfo = adminAuth.getUser()
+    setUser(userInfo)
+    setLoading(false)
   }, [pathname, router])
 
-  const handleSignOut = async () => {
-    await adminAuth.logout()
-    setUser(null) // Clear user state locally
-    router.push("/admin/login")
-    router.refresh() // Ensure fresh state on login page
-  }
-
+  // If on login page, just render children
   if (pathname === "/admin/login") {
     return <>{children}</>
   }
 
-  if (!isSupabaseConfigured) {
-    return (
-      <div className="min-h-screen bg-black text-white font-mono">
-        <header className="border-b border-gray-800 py-4">
-          <div className="container mx-auto px-4">
-            <h1 className="text-xl font-bold">LIGHTBERRY LAB ADMIN</h1>
-          </div>
-        </header>
-        <div className="container mx-auto px-4 py-6">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl font-bold mb-4">Admin Panel Not Available</h2>
-            <p className="text-gray-400 mb-6">
-              Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
-            </p>
-            <Button asChild variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
-              <Link href="/">← Back to Homepage</Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (authStatusLoading) {
+  // If loading, show loading state
+  if (loading) {
     return (
       <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
-        <p>Authenticating...</p>
+        <p>Loading...</p>
       </div>
     )
   }
 
-  // If not loading and not on login page, but user is null (should have been redirected)
-  // This is a fallback, redirect should happen in useEffect
-  if (!user && pathname !== "/admin/login") {
-    console.warn("AdminLayout: User is null but not on login page. Redirecting again.")
+  const handleSignOut = () => {
+    adminAuth.logout()
     router.push("/admin/login")
-    return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
-        <p>Redirecting to login...</p>
-      </div>
-    )
   }
 
   return (
@@ -142,6 +100,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </li>
           </ul>
         </nav>
+        <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-800 rounded text-yellow-400 text-xs">
+          <p>⚠️ Demo Mode: This is a demo admin panel with mock data. Changes will not persist after page refresh.</p>
+        </div>
         {children}
       </div>
     </div>

@@ -1,8 +1,10 @@
 "use client"
+
 import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { adminAuth, hasSupabaseConfig } from "@/lib/admin-auth"
+import { adminAuth } from "@/lib/admin-auth-simple"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,52 +15,34 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    async function checkAuthStatus() {
-      if (hasSupabaseConfig && (await adminAuth.isLoggedIn())) {
-        router.push("/admin")
-      } else {
-        setCheckingAuth(false)
-      }
-      if (!hasSupabaseConfig) {
-        setError("Supabase is not configured. Please set up your environment variables.")
-      }
+    // Check if already logged in
+    if (adminAuth.isLoggedIn()) {
+      router.push("/admin")
     }
-    checkAuthStatus()
   }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!hasSupabaseConfig) {
-      setError("Authentication is not available. Please configure Supabase.")
-      return
-    }
     setLoading(true)
     setError(null)
+
     try {
       const result = await adminAuth.login(email, password)
+
       if (!result.success) {
         setError(result.error || "Login failed")
-      } else {
-        router.push("/admin")
-        router.refresh() // To ensure layout re-evaluates auth
+        return
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to login")
+
+      router.push("/admin")
+    } catch (error: any) {
+      setError(error.message || "Failed to login")
     } finally {
       setLoading(false)
     }
-  }
-
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center p-4">
-        <p>Loading...</p>
-      </div>
-    )
   }
 
   return (
@@ -68,22 +52,21 @@ export default function LoginPage() {
           <CardTitle className="text-xl text-center">LIGHTBERRY LAB ADMIN</CardTitle>
         </CardHeader>
         <CardContent>
-          {!hasSupabaseConfig &&
-            !error && ( // Show config error only if no other error is set
-              <Alert className="mb-4 bg-yellow-900 border-yellow-800 text-yellow-200">
-                <AlertDescription>
-                  Authentication is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and
-                  NEXT_PUBLIC_SUPABASE_ANON_KEY.
-                </AlertDescription>
-              </Alert>
-            )}
           {error && (
             <Alert className="mb-4 bg-red-900 border-red-800 text-white">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+          <div className="mb-4">
+            <Alert className="bg-blue-900 border-blue-800 text-blue-200">
+              <AlertDescription>
+                <p>Demo credentials:</p>
+                <p className="text-xs mt-1">Email: admin@example.com</p>
+                <p className="text-xs">Password: admin123</p>
+              </AlertDescription>
+            </Alert>
+          </div>
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Inputs and button remain the same */}
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm">
                 Email

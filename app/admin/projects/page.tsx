@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import type { Project } from "@/types"
-import { adminDb, hasSupabaseConfig } from "@/lib/admin-auth"
+import { adminDb } from "@/lib/admin-auth-simple"
 import AdminLayout from "../admin-layout"
 
 export default function ProjectsPage() {
@@ -30,30 +30,22 @@ export default function ProjectsPage() {
   }, [])
 
   async function fetchProjects() {
-    if (!hasSupabaseConfig) {
-      toast.error("Database not configured. Please check your environment variables.")
-      setLoading(false)
-      return
-    }
-
     const result = await adminDb.getProjects()
-
-    if (!result.success) {
-      toast.error(`Failed to load projects: ${result.error}`)
+    if (result.success) {
+      setProjects(result.data)
+    } else {
+      toast.error("Failed to load projects")
     }
-
-    setProjects(result.data)
     setLoading(false)
   }
 
   async function deleteProject(id: string) {
     const result = await adminDb.deleteProject(id)
-
-    if (!result.success) {
-      toast.error(`Failed to delete project: ${result.error}`)
-    } else {
+    if (result.success) {
       setProjects(projects.filter((project) => project.id !== id))
       toast.success("Project deleted successfully")
+    } else {
+      toast.error("Failed to delete project")
     }
   }
 
