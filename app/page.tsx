@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import Link from "next/link"
-import { safeSupabaseOperation } from "@/lib/supabase" // getSupabaseClient is used internally by safeSupabaseOperation
+import { safeSupabaseOperation } from "@/lib/supabase"
 import type { Project } from "@/types"
 import { DataStatus } from "@/components/data-status"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -14,52 +14,53 @@ export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [isUsingFallback, setIsUsingFallback] = useState(false)
-  // Fallback projects data (content omitted for brevity)
+
+  // Fallback projects data
   const fallbackProjects: Project[] = [
     {
       id: "1",
       title: "Neural Canvas",
-      description: "AI-powered drawing tool...",
-      imageUrl: "/placeholder.svg?height=200&width=300",
+      description:
+        "AI-powered drawing tool that transforms sketches into digital art using machine learning algorithms.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Neural+Canvas",
       visitUrl: "https://example.com/neural-canvas",
     },
     {
       id: "2",
       title: "Quantum Todo",
-      description: "Task management app...",
-      imageUrl: "/placeholder.svg?height=200&width=300",
+      description: "Task management app with probabilistic scheduling and uncertainty-based priority systems.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Quantum+Todo",
       visitUrl: "https://example.com/quantum-todo",
     },
     {
       id: "3",
       title: "Syntax Poetry",
-      description: "Code-to-poetry generator...",
-      imageUrl: "/placeholder.svg?height=200&width=300",
+      description:
+        "Code-to-poetry generator that converts programming syntax into readable verse and artistic expressions.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Syntax+Poetry",
       visitUrl: "https://example.com/syntax-poetry",
     },
     {
       id: "4",
       title: "Memory Palace VR",
-      description: "Virtual reality memory training...",
-      imageUrl: "/placeholder.svg?height=200&width=300",
+      description: "Virtual reality memory training application using spatial mnemonics and 3D environments.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Memory+Palace+VR",
       visitUrl: "https://example.com/memory-palace",
     },
     {
       id: "5",
       title: "Chaos Calculator",
-      description: "Mathematical visualization tool...",
-      imageUrl: "/placeholder.svg?height=200&width=300",
+      description: "Mathematical visualization tool for exploring fractal patterns and chaotic systems in real-time.",
+      imageUrl: "/placeholder.svg?height=200&width=300&text=Chaos+Calculator",
       visitUrl: "https://example.com/chaos-calculator",
     },
   ]
 
   async function fetchProjects() {
     setLoading(true)
-    // setConnectionError(null) // This state was removed, error is part of safeSupabaseOperation result
 
     const result = await safeSupabaseOperation(
       async (client: SupabaseClient) => {
-        // Client is passed here
         const { data, error } = await client.from("projects").select("*").order("created_at", { ascending: false })
         if (error) {
           throw new Error(`Database error: ${error.message}`)
@@ -72,16 +73,12 @@ export default function HomePage() {
 
     setProjects(result.data)
     setIsUsingFallback(result.isUsingFallback)
-    // setConnectionError(result.error) // Error can be logged or displayed if needed
-    if (result.error) {
-      console.warn("Fetch projects error:", result.error)
-    }
     setLoading(false)
 
     if (result.isUsingFallback) {
-      console.log("🔄 Using fallback data for projects. Error:", result.error)
+      console.log("🔄 Using fallback data:", result.error)
     } else {
-      console.log("✅ Using live data for projects from Supabase")
+      console.log("✅ Using live data from Supabase")
     }
   }
 
@@ -128,7 +125,7 @@ export default function HomePage() {
                           <Image
                             src={project.imageUrl || "/placeholder.svg"}
                             alt={project.title}
-                            fill // Changed from layout="fill"
+                            fill
                             className="object-cover"
                           />
                         </div>
