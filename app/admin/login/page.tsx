@@ -48,15 +48,21 @@ export default function AdminLoginPage() {
     setError("")
     setSuccess("")
 
+    console.log("🔐 Attempting sign in with:", email)
+
     try {
       const result = await adminAuth.signIn(email, password)
+      console.log("🔐 Sign in result:", result)
 
       if (result.success) {
+        console.log("✅ Sign in successful, redirecting to admin")
         router.push("/admin")
       } else {
+        console.error("❌ Sign in failed:", result.error)
         setError(result.error || "Sign in failed")
       }
     } catch (err) {
+      console.error("❌ Sign in exception:", err)
       setError("Sign in failed. Please try again.")
     } finally {
       setLoading(false)
@@ -74,16 +80,22 @@ export default function AdminLoginPage() {
     setError("")
     setSuccess("")
 
+    console.log("📝 Attempting sign up with:", email)
+
     try {
       const result = await adminAuth.signUp(email, password)
+      console.log("📝 Sign up result:", result)
 
       if (result.success) {
+        console.log("✅ Sign up successful")
         setSuccess("Account created successfully! Please check your email to verify your account.")
         setActiveTab("signin")
       } else {
+        console.error("❌ Sign up failed:", result.error)
         setError(result.error || "Sign up failed")
       }
     } catch (err) {
+      console.error("❌ Sign up exception:", err)
       setError("Sign up failed. Please try again.")
     } finally {
       setLoading(false)

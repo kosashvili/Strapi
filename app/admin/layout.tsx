@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { adminAuth } from "@/lib/admin-auth"
 import { hasSupabaseConfig } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import { LogOut, Home, FolderOpen, User } from "lucide-react"
+import { LogOut, Home, FolderOpen, User, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 
@@ -133,6 +133,17 @@ export default function AdminLayout({
                   <FolderOpen size={16} />
                   <span>Projects</span>
                 </Link>
+                <Link
+                  href="/admin/test-auth"
+                  className={`flex items-center space-x-2 px-3 py-2 rounded transition-colors ${
+                    pathname === "/admin/test-auth"
+                      ? "bg-gray-700 text-white"
+                      : "text-gray-300 hover:text-white hover:bg-gray-800"
+                  }`}
+                >
+                  <AlertCircle size={16} />
+                  <span>Test Auth</span>
+                </Link>
               </nav>
             </div>
 
@@ -178,6 +189,17 @@ export default function AdminLayout({
             >
               <FolderOpen size={16} />
               <span>Projects</span>
+            </Link>
+            <Link
+              href="/admin/test-auth"
+              className={`flex items-center space-x-2 px-3 py-2 rounded transition-colors ${
+                pathname === "/admin/test-auth"
+                  ? "bg-gray-700 text-white"
+                  : "text-gray-300 hover:text-white hover:bg-gray-800"
+              }`}
+            >
+              <AlertCircle size={16} />
+              <span>Test</span>
             </Link>
           </div>
         </div>

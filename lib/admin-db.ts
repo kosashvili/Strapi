@@ -1,42 +1,6 @@
 import { safeSupabaseOperation, fallbackProjects } from "@/lib/supabase"
 import type { Project } from "@/types"
 
-// Local storage fallback
-const STORAGE_KEY = "lightberry_projects"
-
-// Get projects from localStorage as fallback
-function getStoredProjects(): Project[] {
-  if (typeof window === "undefined") return []
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      return Array.isArray(parsed) ? parsed : []
-    }
-  } catch (error) {
-    console.warn("Failed to parse stored projects:", error)
-  }
-
-  return fallbackProjects
-}
-
-// Save projects to localStorage as fallback
-function saveProjects(projects: Project[]): void {
-  if (typeof window === "undefined") return
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-  } catch (error) {
-    console.warn("Failed to save projects:", error)
-  }
-}
-
-// Generate a simple ID for local storage
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
-}
-
 export const adminDb = {
   // Get all projects
   async getProjects(): Promise<{ success: boolean; data: Project[]; error?: string }> {
@@ -47,14 +11,9 @@ export const adminDb = {
         if (error) throw new Error(error.message)
         return Array.isArray(data) ? data : []
       },
-      getStoredProjects(),
+      fallbackProjects,
       "Get projects",
     )
-
-    // If using fallback, save the result to localStorage
-    if (result.isUsingFallback) {
-      saveProjects(result.data)
-    }
 
     return {
       success: !result.error,
@@ -97,26 +56,8 @@ export const adminDb = {
       "Create project",
     )
 
-    // If using fallback, create in localStorage
     if (result.isUsingFallback) {
-      try {
-        const projects = getStoredProjects()
-        const newProject: Project = {
-          id: generateId(),
-          title: project.title.trim(),
-          description: project.description.trim(),
-          imageUrl: project.imageUrl?.trim() || "",
-          visitUrl: project.visitUrl.trim(),
-          created_at: new Date().toISOString(),
-        }
-
-        projects.unshift(newProject)
-        saveProjects(projects)
-
-        return { success: true, data: newProject }
-      } catch (error) {
-        return { success: false, error: "Failed to create project" }
-      }
+      return { success: false, error: "Database not available - Supabase required for admin operations" }
     }
 
     return {
@@ -158,30 +99,8 @@ export const adminDb = {
       "Update project",
     )
 
-    // If using fallback, update in localStorage
     if (result.isUsingFallback) {
-      try {
-        const projects = getStoredProjects()
-        const projectIndex = projects.findIndex((p) => p.id === id)
-
-        if (projectIndex === -1) {
-          return { success: false, error: "Project not found" }
-        }
-
-        const updatedProject = {
-          ...projects[projectIndex],
-          ...updates,
-          id, // Ensure ID doesn't change
-          created_at: projects[projectIndex].created_at, // Preserve creation date
-        }
-
-        projects[projectIndex] = updatedProject
-        saveProjects(projects)
-
-        return { success: true, data: updatedProject }
-      } catch (error) {
-        return { success: false, error: "Failed to update project" }
-      }
+      return { success: false, error: "Database not available - Supabase required for admin operations" }
     }
 
     return {
@@ -210,21 +129,8 @@ export const adminDb = {
       "Delete project",
     )
 
-    // If using fallback, delete from localStorage
     if (result.isUsingFallback) {
-      try {
-        const projects = getStoredProjects()
-        const filteredProjects = projects.filter((p) => p.id !== id)
-
-        if (filteredProjects.length === projects.length) {
-          return { success: false, error: "Project not found" }
-        }
-
-        saveProjects(filteredProjects)
-        return { success: true }
-      } catch (error) {
-        return { success: false, error: "Failed to delete project" }
-      }
+      return { success: false, error: "Database not available - Supabase required for admin operations" }
     }
 
     return {
@@ -253,20 +159,8 @@ export const adminDb = {
       "Get project",
     )
 
-    // If using fallback, get from localStorage
     if (result.isUsingFallback) {
-      try {
-        const projects = getStoredProjects()
-        const project = projects.find((p) => p.id === id)
-
-        if (!project) {
-          return { success: false, error: "Project not found" }
-        }
-
-        return { success: true, data: project }
-      } catch (error) {
-        return { success: false, error: "Failed to get project" }
-      }
+      return { success: false, error: "Database not available - Supabase required for admin operations" }
     }
 
     return {

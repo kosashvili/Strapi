@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { adminDb } from "@/lib/admin-db"
 import { hasSupabaseConfig, testSupabaseConnection } from "@/lib/supabase"
-import { Plus, Database, AlertCircle, FolderOpen, HardDrive } from "lucide-react"
+import { adminAuth } from "@/lib/admin-auth"
+import { Plus, Database, AlertCircle, FolderOpen, User } from "lucide-react"
 import Link from "next/link"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -15,10 +17,15 @@ export default function AdminDashboard() {
     error: null as string | null,
   })
   const [dbConnected, setDbConnected] = useState<boolean | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
 
   useEffect(() => {
     async function loadStats() {
       try {
+        // Get current user
+        const currentUser = await adminAuth.getCurrentUser()
+        setUser(currentUser)
+
         // Test database connection
         if (hasSupabaseConfig) {
           const connected = await testSupabaseConnection()
@@ -44,6 +51,27 @@ export default function AdminDashboard() {
     loadStats()
   }, [])
 
+  if (!hasSupabaseConfig) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <Card className="bg-red-900/20 border-red-800">
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <AlertCircle size={20} className="text-red-400" />
+              <div>
+                <p className="font-medium text-red-200">Supabase Not Configured</p>
+                <p className="text-sm text-red-300 mt-1">
+                  Please configure your Supabase environment variables to use the admin panel.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,29 +84,30 @@ export default function AdminDashboard() {
         </Button>
       </div>
 
-      {/* Status Card */}
+      {/* User Info Card */}
       <Card className="bg-gray-900 border-gray-800">
         <CardContent className="p-6">
           <div className="flex items-center space-x-3">
-            {hasSupabaseConfig ? (
-              <>
-                <Database size={20} className={dbConnected ? "text-green-400" : "text-yellow-400"} />
-                <div>
-                  <p className="font-medium">{dbConnected ? "Database Connected" : "Database Connection Issue"}</p>
-                  <p className="text-sm text-gray-400">
-                    {dbConnected ? "Live data from Supabase" : "Using local fallback (check Supabase connection)"}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <HardDrive size={20} className="text-blue-400" />
-                <div>
-                  <p className="font-medium">Local Storage Mode</p>
-                  <p className="text-sm text-gray-400">Data is stored locally in your browser</p>
-                </div>
-              </>
-            )}
+            <User size={20} className="text-blue-400" />
+            <div>
+              <p className="font-medium">Authenticated User</p>
+              <p className="text-sm text-gray-400">{user?.email || "Loading..."}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Database Status Card */}
+      <Card className="bg-gray-900 border-gray-800">
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-3">
+            <Database size={20} className={dbConnected ? "text-green-400" : "text-yellow-400"} />
+            <div>
+              <p className="font-medium">{dbConnected ? "Supabase Connected" : "Database Connection Issue"}</p>
+              <p className="text-sm text-gray-400">
+                {dbConnected ? "Live data from Supabase" : "Check your Supabase connection"}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -102,11 +131,11 @@ export default function AdminDashboard() {
 
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-400">Status</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-400">Authentication</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-400">Active</div>
-            <p className="text-sm text-gray-400 mt-1">System operational</p>
+            <div className="text-2xl font-bold text-green-400">Supabase Auth</div>
+            <p className="text-sm text-gray-400 mt-1">Secure authentication</p>
           </CardContent>
         </Card>
 
@@ -130,24 +159,6 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Info Card */}
-      {!hasSupabaseConfig && (
-        <Card className="bg-blue-900/20 border-blue-800">
-          <CardContent className="p-4">
-            <div className="flex items-start space-x-3">
-              <AlertCircle size={20} className="text-blue-400 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-200">Local Storage Mode</p>
-                <p className="text-sm text-blue-300 mt-1">
-                  Your projects are stored locally in your browser. They will persist between sessions but won't be
-                  shared across devices or browsers.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
