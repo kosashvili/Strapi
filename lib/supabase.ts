@@ -6,14 +6,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 
 // Check if Supabase is configured
-export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.includes("supabase"))
+export const hasSupabaseConfig = Boolean(
+  supabaseUrl && supabaseAnonKey && supabaseUrl.includes("supabase") && supabaseUrl.startsWith("https://"),
+)
 
 // Create a singleton Supabase client
 let supabaseInstance: ReturnType<typeof createClient> | null = null
 
 export function getSupabaseClient() {
   if (!hasSupabaseConfig) {
-    console.warn("Supabase not configured")
+    console.warn("Supabase not configured - missing or invalid environment variables")
     return null
   }
 
@@ -26,8 +28,10 @@ export function getSupabaseClient() {
           detectSessionInUrl: true,
         },
       })
+
+      console.log("✅ Supabase client created successfully")
     } catch (error) {
-      console.error("Failed to create Supabase client:", error)
+      console.error("❌ Failed to create Supabase client:", error)
       return null
     }
   }

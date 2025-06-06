@@ -4,12 +4,12 @@ import type { User } from "@supabase/supabase-js"
 export const adminAuth = {
   // Sign in with email and password
   async signIn(email: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> {
-    const supabase = getSupabaseClient()
-    if (!supabase) {
-      return { success: false, error: "Supabase not configured" }
-    }
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        return { success: false, error: "Supabase not configured" }
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -24,18 +24,19 @@ export const adminAuth = {
         user: data.user || undefined,
       }
     } catch (error: any) {
+      console.error("Sign in error:", error)
       return { success: false, error: error.message || "Sign in failed" }
     }
   },
 
   // Sign up with email and password
   async signUp(email: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> {
-    const supabase = getSupabaseClient()
-    if (!supabase) {
-      return { success: false, error: "Supabase not configured" }
-    }
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        return { success: false, error: "Supabase not configured" }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -50,18 +51,19 @@ export const adminAuth = {
         user: data.user || undefined,
       }
     } catch (error: any) {
+      console.error("Sign up error:", error)
       return { success: false, error: error.message || "Sign up failed" }
     }
   },
 
   // Sign out
   async signOut(): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabaseClient()
-    if (!supabase) {
-      return { success: false, error: "Supabase not configured" }
-    }
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        return { success: false, error: "Supabase not configured" }
+      }
+
       const { error } = await supabase.auth.signOut()
 
       if (error) {
@@ -70,16 +72,17 @@ export const adminAuth = {
 
       return { success: true }
     } catch (error: any) {
+      console.error("Sign out error:", error)
       return { success: false, error: error.message || "Sign out failed" }
     }
   },
 
   // Get current user
   async getCurrentUser(): Promise<User | null> {
-    const supabase = getSupabaseClient()
-    if (!supabase) return null
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) return null
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -92,10 +95,10 @@ export const adminAuth = {
 
   // Get current session
   async getSession() {
-    const supabase = getSupabaseClient()
-    if (!supabase) return null
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) return null
+
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -108,18 +111,23 @@ export const adminAuth = {
 
   // Check if user is authenticated
   async isAuthenticated(): Promise<boolean> {
-    const session = await this.getSession()
-    return !!session?.user
+    try {
+      const session = await this.getSession()
+      return !!session?.user
+    } catch (error) {
+      console.error("Error checking authentication:", error)
+      return false
+    }
   },
 
   // Reset password
   async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabaseClient()
-    if (!supabase) {
-      return { success: false, error: "Supabase not configured" }
-    }
-
     try {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        return { success: false, error: "Supabase not configured" }
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/admin/reset-password`,
       })
@@ -130,15 +138,24 @@ export const adminAuth = {
 
       return { success: true }
     } catch (error: any) {
+      console.error("Reset password error:", error)
       return { success: false, error: error.message || "Password reset failed" }
     }
   },
 
   // Listen to auth state changes
   onAuthStateChange(callback: (event: string, session: any) => void) {
-    const supabase = getSupabaseClient()
-    if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } }
+    try {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        console.warn("Cannot listen to auth state changes - Supabase not configured")
+        return { data: { subscription: { unsubscribe: () => {} } } }
+      }
 
-    return supabase.auth.onAuthStateChange(callback)
+      return supabase.auth.onAuthStateChange(callback)
+    } catch (error) {
+      console.error("Error setting up auth state listener:", error)
+      return { data: { subscription: { unsubscribe: () => {} } } }
+    }
   },
 }
